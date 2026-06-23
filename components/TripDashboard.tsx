@@ -16,6 +16,7 @@ import {
   Wifi,
   WifiOff,
   MapPin,
+  Check,
 } from "lucide-react";
 import { useTrip } from "@/lib/useTrip";
 import {
@@ -648,13 +649,35 @@ export default function TripDashboard({ tripCode }: Props) {
   }
 
   const visibleExpenses = expenses.filter(
-    (e) => !e.isPrivate || e.createdBy === currentMemberId,
+    (e) => (!e.isPrivate || e.createdBy === currentMemberId) && !e.isSettlement,
   );
-  const totalSpent = visibleExpenses
-    .filter((e) => !e.isSettlement)
-    .reduce((s, e) => s + e.amount, 0);
+  const totalSpent = visibleExpenses.reduce((s, e) => s + e.amount, 0);
   const categoryTotals = getCategoryTotals(visibleExpenses);
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
+
+  const totalOwedByMemberToMember: Record<string, Record<string, number>> = {};
+  const totalPaidByMemberToMember: Record<string, Record<string, number>> = {};
+  expenses
+    .filter((e) => !e.isSettlement && e.paidBy !== "ALL")
+    .forEach((e) => {
+      const payer = e.paidBy;
+      e.splits.forEach((s) => {
+        if (s.memberId === payer) return;
+        totalOwedByMemberToMember[s.memberId] ??= {};
+        totalOwedByMemberToMember[s.memberId][payer] =
+          (totalOwedByMemberToMember[s.memberId][payer] ?? 0) + s.amount;
+      });
+    });
+  expenses
+    .filter((e) => e.isSettlement)
+    .forEach((e) => {
+      const debtor = e.paidBy;
+      const creditor = e.splits[0]?.memberId;
+      if (!debtor || debtor === "ALL" || !creditor) return;
+      totalPaidByMemberToMember[debtor] ??= {};
+      totalPaidByMemberToMember[debtor][creditor] =
+        (totalPaidByMemberToMember[debtor][creditor] ?? 0) + e.amount;
+    });
 
   return (
     <div
@@ -912,7 +935,13 @@ export default function TripDashboard({ tripCode }: Props) {
                                     {getMemberInitials(payer?.name ?? "?")}
                                   </div>
                                   <span className="text-[11px] text-muted">
-                                    {payer?.name ?? "Unknown"} paid
+                                    {payer?.name ?? "Unknown"} paid{" "}
+                                    {formatAmount(
+                                      exp.splits.find(
+                                        (s) => s.memberId === exp.paidBy,
+                                      )?.amount ?? 0,
+                                      trip.currency,
+                                    )}
                                   </span>
                                 </div>
                               )}
@@ -924,25 +953,52 @@ export default function TripDashboard({ tripCode }: Props) {
 
                             {/* Row 4: Splits */}
                             <div className="flex flex-wrap gap-1 mt-2">
-                              {exp.splits.map((split) => {
-                                const member = trip.members.find(
-                                  (m) => m.id === split.memberId,
-                                );
-                                const isMe = split.memberId === currentMemberId;
-                                return (
-                                  <span
-                                    key={split.memberId}
-                                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                                      isMe
-                                        ? "border-ocean/30 bg-ocean/8 text-ocean"
-                                        : "border-warmgray bg-sand text-muted"
-                                    }`}
-                                  >
-                                    {member?.name ?? "Unknown"}:{" "}
-                                    {formatAmount(split.amount, trip.currency)}
-                                  </span>
-                                );
-                              })}
+                              {exp.splits
+                                .filter((s) => s.memberId !== exp.paidBy)
+                                .map((split) => {
+                                  const member = trip.members.find(
+                                    (m) => m.id === split.memberId,
+                                  );
+                                  const isMe =
+                                    split.memberId === currentMemberId;
+                                  const owedToPayer =
+                                    totalOwedByMemberToMember[split.memberId]?.[
+                                      exp.paidBy
+                                    ] ?? 0;
+                                  const paidToPayer =
+                                    totalPaidByMemberToMember[split.memberId]?.[
+                                      exp.paidBy
+                                    ] ?? 0;
+                                  const isPaid =
+                                    exp.paidBy !== "ALL" &&
+                                    split.memberId !== exp.paidBy &&
+                                    owedToPayer > 0 &&
+                                    paidToPayer >= owedToPayer;
+                                  return (
+                                    <span
+                                      key={split.memberId}
+                                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
+                                        isMe
+                                          ? "border-ocean/30 bg-ocean/8 text-ocean"
+                                          : "border-warmgray bg-sand text-muted"
+                                      }`}
+                                    >
+                                      {member?.name ?? "Unknown"}:{" "}
+                                      {formatAmount(
+                                        split.amount,
+                                        trip.currency,
+                                      )}
+                                      {isPaid && (
+                                        <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-forest text-white">
+                                          <Check
+                                            className="w-2 h-2"
+                                            strokeWidth={4}
+                                          />
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })}
                             </div>
 
                             {/* Row 5: Your share */}
@@ -995,7 +1051,7 @@ export default function TripDashboard({ tripCode }: Props) {
             <div className="animate-fade-in">
               <BalanceSheet
                 trip={trip}
-                expenses={visibleExpenses}
+                expenses={expenses}
                 onRecordSettlement={async ({ from, to, amount }) => {
                   const fromMember = trip.members.find((m) => m.id === from);
                   const toMember = trip.members.find((m) => m.id === to);

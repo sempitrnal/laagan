@@ -1,5 +1,5 @@
 "use client";
-import { ArrowRight, HandCoins, Receipt, Scale, Check } from "lucide-react";
+import { ArrowRight, Receipt, Scale, Check } from "lucide-react";
 import type { Trip, Expense } from "@/lib/types";
 import {
   calculateBalances,
@@ -45,6 +45,9 @@ export default function BalanceSheet({
     net: b.net + (settlementAdjustments[b.memberId] ?? 0),
   }));
   const settlements = calculateSettlements(netBalances);
+  const netBalanceById = Object.fromEntries(
+    netBalances.map((b) => [b.memberId, b]),
+  );
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
 
   return (
@@ -52,10 +55,9 @@ export default function BalanceSheet({
       {/* ── Explanation banner ───────────────────── */}
       <div className="bg-ocean/5 border border-ocean/20 rounded-2xl px-5 py-3">
         <p className="text-[11px] sm:text-xs text-ocean-dark leading-relaxed">
-          <strong>How it works:</strong> &quot;Out of Pocket&quot; is what
-          someone actually paid. &quot;Your Cost&quot; is their fair share of
-          the trip. If they paid more than their cost, they get money back. If
-          less, they owe.
+          <strong>How it works:</strong> &quot;Your Cost&quot; is your fair
+          share of the trip. &quot;Balance&quot; is what you still owe or are
+          owed after any recorded payments.
         </p>
       </div>
 
@@ -68,8 +70,14 @@ export default function BalanceSheet({
           {balances.map((b) => {
             const idx = memberIndex[b.memberId] ?? 0;
             const color = getMemberColor(idx);
-            const isSettled = Math.abs(b.net) < 0.01;
-            const isOwed = b.net > 0.01;
+            const netB = netBalanceById[b.memberId];
+            const currentNet = netB?.net ?? b.net;
+            const isSettled = Math.abs(currentNet) < 0.01;
+            const isOwed = currentNet > 0.01;
+            const hasPaidSettlement = settlementExpenses.some(
+              (s) => s.paidBy === b.memberId,
+            );
+            const postSettlementSettled = isSettled && hasPaidSettlement;
 
             return (
               <div key={b.memberId} className="px-5 py-4 animate-slide-up">
@@ -81,8 +89,16 @@ export default function BalanceSheet({
                   >
                     {getMemberInitials(b.memberName)}
                   </div>
-                  <p className="font-semibold text-night text-sm flex-1">
+                  <p className="font-semibold text-night text-sm flex-1 flex items-center gap-1.5">
                     {b.memberName}
+                    {postSettlementSettled && (
+                      <span
+                        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-forest text-white"
+                        title="Settled up"
+                      >
+                        <Check className="w-2.5 h-2.5" strokeWidth={4} />
+                      </span>
+                    )}
                   </p>
 
                   {/* Net badge */}
@@ -98,28 +114,13 @@ export default function BalanceSheet({
                     {isSettled
                       ? "Even"
                       : isOwed
-                        ? `Gets back ${formatAmount(b.net, trip.currency)}`
-                        : `Owes ${formatAmount(Math.abs(b.net), trip.currency)}`}
+                        ? `Gets back ${formatAmount(currentNet, trip.currency)}`
+                        : `Owes ${formatAmount(Math.abs(currentNet), trip.currency)}`}
                   </div>
                 </div>
 
-                {/* Row 2: Paid / Share / Net mini cards */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-sand rounded-xl p-2.5 text-center">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <HandCoins className="w-3 h-3 text-ocean" />
-                      <span className="text-[10px] font-semibold text-muted lowercase tracking-wide">
-                        outta Pocket
-                      </span>
-                    </div>
-                    <p className="text-sm font-bold text-night">
-                      {formatAmount(b.paid, trip.currency)}
-                    </p>
-                    <p className="text-[10px] text-muted mt-0.5">
-                      actually paid
-                    </p>
-                  </div>
-
+                {/* Row 2: Share / Net mini cards */}
+                <div className="grid grid-cols-2 gap-2">
                   <div className="bg-sand rounded-xl p-2.5 text-center">
                     <div className="flex items-center justify-center gap-1 mb-1">
                       <Receipt className="w-3 h-3 text-ocean" />
@@ -146,8 +147,8 @@ export default function BalanceSheet({
                       {isSettled
                         ? "—"
                         : isOwed
-                          ? `+${formatAmount(b.net, trip.currency)}`
-                          : `-${formatAmount(Math.abs(b.net), trip.currency)}`}
+                          ? `+${formatAmount(currentNet, trip.currency)}`
+                          : `-${formatAmount(Math.abs(currentNet), trip.currency)}`}
                     </p>
                     <p className="text-[10px] text-muted mt-0.5">
                       {isSettled

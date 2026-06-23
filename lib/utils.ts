@@ -161,9 +161,11 @@ export function getCategoryTotals(
     shopping: 0,
     other: 0,
   };
-  expenses.forEach((e) => {
-    totals[e.category] = (totals[e.category] ?? 0) + e.amount;
-  });
+  expenses
+    .filter((e) => !e.isSettlement)
+    .forEach((e) => {
+      totals[e.category] = (totals[e.category] ?? 0) + e.amount;
+    });
   return totals;
 }
 

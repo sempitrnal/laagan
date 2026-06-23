@@ -56,6 +56,14 @@ export interface Settlement {
   amount: number;
 }
 
+export interface Message {
+  id: string;
+  text: string;
+  senderId: string;
+  senderName: string;
+  createdAt: number;
+}
+
 export interface RecentTrip {
   code: string;
   name: string;

@@ -10,6 +10,7 @@ import {
   ReceiptText,
   Scale,
   Trash2,
+  MessageCircle,
   Pencil,
   UserPlus,
   Wifi,
@@ -33,6 +34,7 @@ import {
 import type { Category, Expense } from "@/lib/types";
 import AddExpenseModal from "./AddExpenseModal";
 import BalanceSheet from "./BalanceSheet";
+import ChatPanel from "./ChatPanel";
 import ShareModal from "./ShareModal";
 
 interface Props {
@@ -379,6 +381,7 @@ export default function TripDashboard({ tripCode }: Props) {
   const {
     trip,
     expenses,
+    messages,
     loading,
     error,
     usingFirebase,
@@ -387,13 +390,14 @@ export default function TripDashboard({ tripCode }: Props) {
     deleteExpense,
     addMember,
     updateBudget,
+    sendMessage,
   } = useTrip(tripCode);
 
   const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showShare, setShowShare] = useState(false);
-  const [activeTab, setActiveTab] = useState<"expenses" | "balances">(
+  const [activeTab, setActiveTab] = useState<"expenses" | "balances" | "chat">(
     "expenses",
   );
   const [showAddMember, setShowAddMember] = useState(false);
@@ -527,7 +531,9 @@ export default function TripDashboard({ tripCode }: Props) {
   const visibleExpenses = expenses.filter(
     (e) => !e.isPrivate || e.createdBy === currentMemberId,
   );
-  const totalSpent = visibleExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalSpent = visibleExpenses
+    .filter((e) => !e.isSettlement)
+    .reduce((s, e) => s + e.amount, 0);
   const categoryTotals = getCategoryTotals(visibleExpenses);
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
 
@@ -646,6 +652,12 @@ export default function TripDashboard({ tripCode }: Props) {
                 label: "Balances",
                 Icon: Scale,
                 count: trip.members.length,
+              },
+              {
+                key: "chat",
+                label: "Chat",
+                Icon: MessageCircle,
+                count: messages.length,
               },
             ] as const
           ).map(({ key, label, Icon, count }) => (
@@ -841,6 +853,24 @@ export default function TripDashboard({ tripCode }: Props) {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Chat tab ─────────────────────────────── */}
+        {activeTab === "chat" && (
+          <div className="animate-fade-in">
+            <ChatPanel
+              messages={messages}
+              trip={trip}
+              currentMemberId={currentMemberId}
+              onSend={async (text) => {
+                const member = trip.members.find(
+                  (m) => m.id === currentMemberId,
+                );
+                if (!member) return;
+                await sendMessage(text, member.id, member.name);
+              }}
+            />
           </div>
         )}
 

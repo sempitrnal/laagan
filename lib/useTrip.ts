@@ -11,11 +11,12 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "./firebase";
-import type { Trip, Expense, Member } from "./types";
+import type { Trip, Expense, Member, Message } from "./types";
 import { generateId } from "./utils";
 
 const TRIP_KEY = (code: string) => `wt_trip_${code}`;
 const EXPENSES_KEY = (code: string) => `wt_expenses_${code}`;
+const MESSAGES_KEY = (code: string) => `wt_messages_${code}`;
 
 function loadLocalTrip(code: string): Trip | null {
   if (typeof window === "undefined") return null;
@@ -37,9 +38,20 @@ function saveLocalExpenses(code: string, expenses: Expense[]) {
   localStorage.setItem(EXPENSES_KEY(code), JSON.stringify(expenses));
 }
 
+function loadLocalMessages(code: string): Message[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(MESSAGES_KEY(code));
+  return raw ? (JSON.parse(raw) as Message[]) : [];
+}
+
+function saveLocalMessages(code: string, messages: Message[]) {
+  localStorage.setItem(MESSAGES_KEY(code), JSON.stringify(messages));
+}
+
 export type UseTripResult = {
   trip: Trip | null;
   expenses: Expense[];
+  messages: Message[];
   loading: boolean;
   error: string | null;
   usingFirebase: boolean;
@@ -51,11 +63,17 @@ export type UseTripResult = {
   deleteExpense: (expenseId: string) => Promise<void>;
   addMember: (name: string) => Promise<Member>;
   updateBudget: (amount: number) => Promise<void>;
+  sendMessage: (
+    text: string,
+    senderId: string,
+    senderName: string,
+  ) => Promise<void>;
 };
 
 export function useTrip(code: string): UseTripResult {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const tripRef = useRef<Trip | null>(null);
@@ -116,9 +134,25 @@ export function useTrip(code: string): UseTripResult {
         },
       );
 
+      const messagesCol = collection(db, "trips", code, "messages");
+      const messagesQ = query(messagesCol, orderBy("createdAt", "asc"));
+      const unsubMessages = onSnapshot(
+        messagesQ,
+        (snap) => {
+          setMessages(
+            snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<Message, "id">),
+            })),
+          );
+        },
+        (err) => console.error("Messages subscription error:", err),
+      );
+
       return () => {
         unsubTrip();
         unsubExp();
+        unsubMessages();
       };
     } else {
       const t = loadLocalTrip(code);
@@ -127,6 +161,7 @@ export function useTrip(code: string): UseTripResult {
       } else {
         setTrip(t);
         setExpenses(loadLocalExpenses(code));
+        setMessages(loadLocalMessages(code));
       }
       setLoading(false);
     }
@@ -236,9 +271,38 @@ export function useTrip(code: string): UseTripResult {
     [code],
   );
 
+  const sendMessage = useCallback(
+    async (text: string, senderId: string, senderName: string) => {
+      const msg: Message = {
+        id: generateId(),
+        text,
+        senderId,
+        senderName,
+        createdAt: Date.now(),
+      };
+      if (isFirebaseConfigured && db) {
+        const msgDoc = doc(collection(db, "trips", code, "messages"));
+        await setDoc(msgDoc, {
+          text: msg.text,
+          senderId: msg.senderId,
+          senderName: msg.senderName,
+          createdAt: msg.createdAt,
+        });
+      } else {
+        setMessages((prev) => {
+          const updated = [...prev, msg];
+          saveLocalMessages(code, updated);
+          return updated;
+        });
+      }
+    },
+    [code],
+  );
+
   return {
     trip,
     expenses,
+    messages,
     loading,
     error,
     usingFirebase: isFirebaseConfigured,
@@ -247,5 +311,6 @@ export function useTrip(code: string): UseTripResult {
     deleteExpense,
     addMember,
     updateBudget,
+    sendMessage,
   };
 }

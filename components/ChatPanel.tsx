@@ -5,6 +5,12 @@ import type { Message, Trip } from "@/lib/types";
 import { getMemberColor, getMemberInitials } from "@/lib/utils";
 import { useChat } from "@/lib/useChat";
 import { uploadChatImage } from "@/lib/tripService";
+import {
+  requestNotificationPermission,
+  subscribeToPush,
+  savePushSubscription,
+  notifyTripMembers,
+} from "@/lib/notifications";
 import { playSendSound, playNotifySound, unlockAudio } from "@/lib/sounds";
 
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -138,6 +144,24 @@ export default function ChatPanel({
     if (showGifInput) gifInputRef.current?.focus();
   }, [showGifInput]);
 
+  /* ── Subscribe to push notifications ─────── */
+  useEffect(() => {
+    if (!currentMemberId) return;
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) return;
+    const memberId = currentMemberId;
+    const key = vapidKey;
+    async function init() {
+      const granted = await requestNotificationPermission();
+      if (!granted) return;
+      const subscription = await subscribeToPush(key);
+      if (subscription) {
+        await savePushSubscription(trip.id, memberId, subscription);
+      }
+    }
+    init().catch(() => {});
+  }, [currentMemberId, trip.id]);
+
   /* ── Auto-scroll ─────────────────────────── */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -191,11 +215,25 @@ export default function ChatPanel({
   }
 
   async function submitMessage(content: string) {
+    if (!currentMemberId) return;
     setSending(true);
     setTyping(false);
     playSendSound();
     try {
       await onSend(content);
+      const sender = trip.members.find((m) => m.id === currentMemberId);
+      const body = isImageUrl(content)
+        ? "Sent an image"
+        : content.slice(0, 100);
+      await notifyTripMembers(
+        trip.id,
+        sender?.name ?? "Someone",
+        body,
+        currentMemberId,
+        `/trip/${trip.id}`,
+      );
+    } catch {
+      // Notification failures are non-fatal
     } finally {
       setSending(false);
     }

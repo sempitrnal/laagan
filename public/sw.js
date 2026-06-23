@@ -25,6 +25,40 @@ self.addEventListener("message", (event) => {
   }
 });
 
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload = {};
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: event.data.text() };
+  }
+  const title = payload.title || "Laagan";
+  const options = {
+    body: payload.body || "New activity",
+    icon: "/icon-192.svg",
+    badge: "/icon-192.svg",
+    data: payload.data || {},
+    tag: payload.tag || "laagan",
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if (client.url === url && "focus" in client) return client.focus();
+        }
+        if (self.clients.openWindow) return self.clients.openWindow(url);
+      }),
+  );
+});
+
 function isNavigation(req) {
   return req.mode === "navigate" || req.destination === "document";
 }

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Send } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 import type { Message, Trip } from "@/lib/types";
 import { getMemberColor, getMemberInitials } from "@/lib/utils";
 
@@ -9,6 +9,7 @@ interface Props {
   trip: Trip;
   currentMemberId: string | null;
   onSend: (text: string) => Promise<void>;
+  onClose: () => void;
 }
 
 function formatTime(ts: number) {
@@ -33,15 +34,30 @@ export default function ChatPanel({
   trip,
   currentMemberId,
   onSend,
+  onClose,
 }: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    function onResize() {
+      const offset = window.innerHeight - (vv!.height + vv!.offsetTop);
+      document.getElementById("chat-input-bar")!.style.paddingBottom =
+        offset > 0 ? `${offset}px` : "env(safe-area-inset-bottom, 8px)";
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
 
   async function handleSend() {
     const trimmed = text.trim();
@@ -52,6 +68,7 @@ export default function ChatPanel({
       await onSend(trimmed);
     } finally {
       setSending(false);
+      inputRef.current?.focus();
     }
   }
 
@@ -68,10 +85,32 @@ export default function ChatPanel({
 
   return (
     <div
-      className="flex flex-col bg-white rounded-2xl border border-warmgray shadow-sm overflow-hidden"
-      style={{ height: "60vh" }}
+      className="fixed inset-0 z-50 flex flex-col bg-sand"
+      style={{ height: "100dvh" }}
     >
-      {/* Messages area */}
+      {/* Header */}
+      <div
+        className="bg-ocean-dark text-white px-4 flex items-center gap-3 shrink-0"
+        style={{
+          paddingTop: "max(env(safe-area-inset-top), 12px)",
+          paddingBottom: "12px",
+        }}
+      >
+        <button
+          onClick={onClose}
+          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm leading-none">Group Chat</p>
+          <p className="text-xs text-white/60 mt-0.5">
+            {trip.name} · {trip.members.length} members
+          </p>
+        </div>
+      </div>
+
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
@@ -110,7 +149,6 @@ export default function ChatPanel({
                         {getMemberInitials(msg.senderName)}
                       </div>
                     )}
-
                     <div
                       className={`max-w-[72%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}
                     >
@@ -120,11 +158,12 @@ export default function ChatPanel({
                         </span>
                       )}
                       <div
-                        className={`px-3 py-2 rounded-2xl text-sm leading-snug break-words ${
+                        className={`px-3 py-2 rounded-2xl text-sm leading-snug ${
                           isMe
                             ? "bg-ocean text-white rounded-br-sm"
-                            : "bg-sand text-night rounded-bl-sm"
+                            : "bg-white text-night rounded-bl-sm shadow-sm"
                         }`}
+                        style={{ wordBreak: "break-word" }}
                       >
                         {msg.text}
                       </div>
@@ -142,11 +181,16 @@ export default function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar */}
-      <div className="border-t border-warmgray px-3 py-2.5 flex items-center gap-2 bg-white shrink-0">
+      {/* Input bar — stays above keyboard via visualViewport padding */}
+      <div
+        id="chat-input-bar"
+        className="bg-white border-t border-warmgray px-3 pt-2 flex items-center gap-2 shrink-0"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
+      >
         {currentMemberId ? (
           <>
             <input
+              ref={inputRef}
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -157,18 +201,18 @@ export default function ChatPanel({
                 }
               }}
               placeholder="Message the group…"
-              className="flex-1 bg-sand rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ocean/30 placeholder:text-muted"
+              className="flex-1 bg-sand rounded-2xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ocean/30 placeholder:text-muted"
             />
             <button
               onClick={handleSend}
               disabled={!text.trim() || sending}
-              className="w-9 h-9 rounded-xl bg-ocean text-white flex items-center justify-center shrink-0 disabled:opacity-40 btn-press transition-opacity"
+              className="w-9 h-9 rounded-full bg-ocean text-white flex items-center justify-center shrink-0 disabled:opacity-40 btn-press transition-opacity"
             >
               <Send className="w-4 h-4" />
             </button>
           </>
         ) : (
-          <p className="text-xs text-muted text-center w-full py-1.5">
+          <p className="text-xs text-muted text-center w-full py-2">
             Select your name above to chat
           </p>
         )}

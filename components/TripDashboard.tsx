@@ -35,6 +35,7 @@ import type { Category, Expense } from "@/lib/types";
 import AddExpenseModal from "./AddExpenseModal";
 import BalanceSheet from "./BalanceSheet";
 import ChatPanel from "./ChatPanel";
+import PullToRefresh from "./PullToRefresh";
 import ShareModal from "./ShareModal";
 
 interface Props {
@@ -397,9 +398,10 @@ export default function TripDashboard({ tripCode }: Props) {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [showShare, setShowShare] = useState(false);
-  const [activeTab, setActiveTab] = useState<"expenses" | "balances" | "chat">(
+  const [activeTab, setActiveTab] = useState<"expenses" | "balances">(
     "expenses",
   );
+  const [showChat, setShowChat] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
   const [addingMember, setAddingMember] = useState(false);
@@ -538,7 +540,7 @@ export default function TripDashboard({ tripCode }: Props) {
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
 
   return (
-    <div className="min-h-screen bg-sand pb-24">
+    <div className="min-h-screen bg-sand pb-24 flex flex-col">
       {/* ── Sticky Header ─────────────────────────── */}
       <header className="sticky top-0 z-40 bg-ocean-dark text-white shadow-lg">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
@@ -609,297 +611,286 @@ export default function TripDashboard({ tripCode }: Props) {
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4 pt-5 space-y-4">
-        {/* Budget card */}
-        <div className="animate-slide-up">
-          <BudgetCard
-            totalBudget={trip.totalBudget}
-            totalSpent={totalSpent}
-            currency={trip.currency}
-            onEdit={updateBudget}
-          />
-        </div>
-
-        {/* Category + Members side by side on larger screens */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="animate-slide-up delay-75">
-            <CategoryCard
+      <PullToRefresh
+        onRefresh={async () => {
+          if (usingFirebase) {
+            window.location.reload();
+          } else {
+            window.location.reload();
+          }
+        }}
+      >
+        <div className="max-w-3xl mx-auto px-4 pt-5 space-y-4">
+          {/* Budget card */}
+          <div className="animate-slide-up">
+            <BudgetCard
+              totalBudget={trip.totalBudget}
               totalSpent={totalSpent}
-              totals={categoryTotals}
               currency={trip.currency}
+              onEdit={updateBudget}
             />
           </div>
-          <div className="animate-slide-up delay-150">
-            <MembersCard
-              members={trip.members}
-              onAddMember={() => setShowAddMember(true)}
-            />
-          </div>
-        </div>
 
-        {/* Tab bar */}
-        <div className="flex rounded-2xl bg-white border border-warmgray overflow-hidden shadow-sm animate-slide-up delay-225">
-          {(
-            [
-              {
-                key: "expenses",
-                label: "Expenses",
-                Icon: ReceiptText,
-                count: visibleExpenses.length,
-              },
-              {
-                key: "balances",
-                label: "Balances",
-                Icon: Scale,
-                count: trip.members.length,
-              },
-              {
-                key: "chat",
-                label: "Chat",
-                Icon: MessageCircle,
-                count: messages.length,
-              },
-            ] as const
-          ).map(({ key, label, Icon, count }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-semibold transition-colors ${
-                activeTab === key
-                  ? "bg-ocean text-white"
-                  : "text-muted hover:bg-sand"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded-full ${
+          {/* Category + Members side by side on larger screens */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="animate-slide-up delay-75">
+              <CategoryCard
+                totalSpent={totalSpent}
+                totals={categoryTotals}
+                currency={trip.currency}
+              />
+            </div>
+            <div className="animate-slide-up delay-150">
+              <MembersCard
+                members={trip.members}
+                onAddMember={() => setShowAddMember(true)}
+              />
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex rounded-2xl bg-white border border-warmgray overflow-hidden shadow-sm animate-slide-up delay-225">
+            {(
+              [
+                {
+                  key: "expenses",
+                  label: "Expenses",
+                  Icon: ReceiptText,
+                  count: visibleExpenses.length,
+                },
+                {
+                  key: "balances",
+                  label: "Balances",
+                  Icon: Scale,
+                  count: trip.members.length,
+                },
+              ] as const
+            ).map(({ key, label, Icon, count }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-semibold transition-colors ${
                   activeTab === key
-                    ? "bg-white/20 text-white"
-                    : "bg-sand text-muted"
+                    ? "bg-ocean text-white"
+                    : "text-muted hover:bg-sand"
                 }`}
               >
-                {count}
-              </span>
-            </button>
-          ))}
-        </div>
+                <Icon className="w-4 h-4" />
+                {label}
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === key
+                      ? "bg-white/20 text-white"
+                      : "bg-sand text-muted"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            ))}
+          </div>
 
-        {/* ── Expenses tab ─────────────────────────── */}
-        {activeTab === "expenses" && (
-          <div className="animate-fade-in">
-            {visibleExpenses.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-warmgray shadow-sm px-6 py-12 text-center">
-                <div className="text-5xl mb-3 animate-float">🧳</div>
-                <p className="font-semibold text-night mb-1">No expenses yet</p>
-                <p className="text-sm text-muted">
-                  Tap the + button to log your first expense.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {visibleExpenses.map((exp, i) => {
-                  const isEveryonePaid = exp.paidBy === "ALL";
-                  const payerIdx = isEveryonePaid
-                    ? 0
-                    : (memberIndex[exp.paidBy] ?? 0);
-                  const payer = isEveryonePaid
-                    ? null
-                    : trip.members.find((m) => m.id === exp.paidBy);
-                  const myShare = exp.splits.find(
-                    (s) => s.memberId === currentMemberId,
-                  );
+          {/* ── Expenses tab ─────────────────────────── */}
+          {activeTab === "expenses" && (
+            <div className="animate-fade-in">
+              {visibleExpenses.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-warmgray shadow-sm px-6 py-12 text-center">
+                  <div className="text-5xl mb-3 animate-float">🧳</div>
+                  <p className="font-semibold text-night mb-1">
+                    No expenses yet
+                  </p>
+                  <p className="text-sm text-muted">
+                    Tap the + button to log your first expense.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {visibleExpenses.map((exp, i) => {
+                    const isEveryonePaid = exp.paidBy === "ALL";
+                    const payerIdx = isEveryonePaid
+                      ? 0
+                      : (memberIndex[exp.paidBy] ?? 0);
+                    const payer = isEveryonePaid
+                      ? null
+                      : trip.members.find((m) => m.id === exp.paidBy);
+                    const myShare = exp.splits.find(
+                      (s) => s.memberId === currentMemberId,
+                    );
 
-                  return (
-                    <div
-                      key={exp.id}
-                      className="expense-card bg-white rounded-2xl border border-warmgray shadow-sm px-4 sm:px-5 py-4 animate-slide-up"
-                      style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Category emoji */}
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 mt-0.5"
-                          style={{
-                            backgroundColor: `${CATEGORY_COLORS[exp.category]}18`,
-                          }}
-                        >
-                          {CATEGORY_EMOJIS[exp.category]}
-                        </div>
-
-                        {/* Main content stack */}
-                        <div className="flex-1 min-w-0">
-                          {/* Row 1: Description + Amount */}
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold text-night text-sm leading-tight">
-                              {exp.description}
-                            </p>
-                            <p className="font-bold text-night text-base shrink-0">
-                              {formatAmount(exp.amount, trip.currency)}
-                            </p>
+                    return (
+                      <div
+                        key={exp.id}
+                        className="expense-card bg-white rounded-2xl border border-warmgray shadow-sm px-4 sm:px-5 py-4 animate-slide-up"
+                        style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Category emoji */}
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 mt-0.5"
+                            style={{
+                              backgroundColor: `${CATEGORY_COLORS[exp.category]}18`,
+                            }}
+                          >
+                            {CATEGORY_EMOJIS[exp.category]}
                           </div>
 
-                          {/* Row 2: Category + badges (single line) */}
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            <span
-                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-white leading-none"
-                              style={{
-                                backgroundColor: CATEGORY_COLORS[exp.category],
-                              }}
-                            >
-                              {CATEGORY_LABELS[exp.category]}
-                            </span>
-                            {exp.isPrivate && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted/20 text-muted leading-none">
-                                🔒 Private
-                              </span>
-                            )}
-                            {exp.isSettlement && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-forest/15 text-forest leading-none">
-                                💸 Settlement
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Row 3: Paid by + Date */}
-                          <div className="flex items-center gap-2 mt-1.5">
-                            {isEveryonePaid ? (
-                              <span className="text-[11px] font-medium text-forest">
-                                👥 Everyone paid
-                              </span>
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className="w-4 h-4 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0"
-                                  style={{
-                                    backgroundColor: getMemberColor(payerIdx),
-                                  }}
-                                >
-                                  {getMemberInitials(payer?.name ?? "?")}
-                                </div>
-                                <span className="text-[11px] text-muted">
-                                  {payer?.name ?? "Unknown"} paid
-                                </span>
-                              </div>
-                            )}
-                            <span className="text-warmgray">·</span>
-                            <span className="text-[11px] text-muted">
-                              {formatDate(exp.date)}
-                            </span>
-                          </div>
-
-                          {/* Row 4: Splits */}
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {exp.splits.map((split) => {
-                              const member = trip.members.find(
-                                (m) => m.id === split.memberId,
-                              );
-                              const isMe = split.memberId === currentMemberId;
-                              return (
-                                <span
-                                  key={split.memberId}
-                                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                                    isMe
-                                      ? "border-ocean/30 bg-ocean/8 text-ocean"
-                                      : "border-warmgray bg-sand text-muted"
-                                  }`}
-                                >
-                                  {member?.name ?? "Unknown"}:{" "}
-                                  {formatAmount(split.amount, trip.currency)}
-                                </span>
-                              );
-                            })}
-                          </div>
-
-                          {/* Row 5: Your share */}
-                          {myShare &&
-                            !isEveryonePaid &&
-                            exp.paidBy !== currentMemberId && (
-                              <p className="text-[10px] text-muted mt-1.5 italic">
-                                Your share:{" "}
-                                {formatAmount(myShare.amount, trip.currency)}
+                          {/* Main content stack */}
+                          <div className="flex-1 min-w-0">
+                            {/* Row 1: Description + Amount */}
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-semibold text-night text-sm leading-tight">
+                                {exp.description}
                               </p>
-                            )}
-                        </div>
+                              <p className="font-bold text-night text-base shrink-0">
+                                {formatAmount(exp.amount, trip.currency)}
+                              </p>
+                            </div>
 
-                        {/* Action buttons — grouped tightly */}
-                        <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                          <button
-                            onClick={() => setEditingExpense(exp)}
-                            className="p-1.5 rounded-lg transition-colors text-muted hover:bg-sand hover:text-ocean"
-                            title="Edit"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(exp.id)}
-                            className={`p-1.5 rounded-lg transition-colors ${
-                              deleteConfirm === exp.id
-                                ? "bg-coral text-white"
-                                : "text-muted hover:bg-sand hover:text-coral"
-                            }`}
-                            title={
-                              deleteConfirm === exp.id
-                                ? "Tap again to confirm"
-                                : "Delete"
-                            }
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            {/* Row 2: Category + badges (single line) */}
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-white leading-none"
+                                style={{
+                                  backgroundColor:
+                                    CATEGORY_COLORS[exp.category],
+                                }}
+                              >
+                                {CATEGORY_LABELS[exp.category]}
+                              </span>
+                              {exp.isPrivate && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted/20 text-muted leading-none">
+                                  🔒 Private
+                                </span>
+                              )}
+                              {exp.isSettlement && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-forest/15 text-forest leading-none">
+                                  💸 Settlement
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Row 3: Paid by + Date */}
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {isEveryonePaid ? (
+                                <span className="text-[11px] font-medium text-forest">
+                                  👥 Everyone paid
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <div
+                                    className="w-4 h-4 rounded-full text-white text-[8px] font-bold flex items-center justify-center shrink-0"
+                                    style={{
+                                      backgroundColor: getMemberColor(payerIdx),
+                                    }}
+                                  >
+                                    {getMemberInitials(payer?.name ?? "?")}
+                                  </div>
+                                  <span className="text-[11px] text-muted">
+                                    {payer?.name ?? "Unknown"} paid
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-warmgray">·</span>
+                              <span className="text-[11px] text-muted">
+                                {formatDate(exp.date)}
+                              </span>
+                            </div>
+
+                            {/* Row 4: Splits */}
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {exp.splits.map((split) => {
+                                const member = trip.members.find(
+                                  (m) => m.id === split.memberId,
+                                );
+                                const isMe = split.memberId === currentMemberId;
+                                return (
+                                  <span
+                                    key={split.memberId}
+                                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                                      isMe
+                                        ? "border-ocean/30 bg-ocean/8 text-ocean"
+                                        : "border-warmgray bg-sand text-muted"
+                                    }`}
+                                  >
+                                    {member?.name ?? "Unknown"}:{" "}
+                                    {formatAmount(split.amount, trip.currency)}
+                                  </span>
+                                );
+                              })}
+                            </div>
+
+                            {/* Row 5: Your share */}
+                            {myShare &&
+                              !isEveryonePaid &&
+                              exp.paidBy !== currentMemberId && (
+                                <p className="text-[10px] text-muted mt-1.5 italic">
+                                  Your share:{" "}
+                                  {formatAmount(myShare.amount, trip.currency)}
+                                </p>
+                              )}
+                          </div>
+
+                          {/* Action buttons — grouped tightly */}
+                          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                            <button
+                              onClick={() => setEditingExpense(exp)}
+                              className="p-1.5 rounded-lg transition-colors text-muted hover:bg-sand hover:text-ocean"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(exp.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                deleteConfirm === exp.id
+                                  ? "bg-coral text-white"
+                                  : "text-muted hover:bg-sand hover:text-coral"
+                              }`}
+                              title={
+                                deleteConfirm === exp.id
+                                  ? "Tap again to confirm"
+                                  : "Delete"
+                              }
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* ── Chat tab ─────────────────────────────── */}
-        {activeTab === "chat" && (
-          <div className="animate-fade-in">
-            <ChatPanel
-              messages={messages}
-              trip={trip}
-              currentMemberId={currentMemberId}
-              onSend={async (text) => {
-                const member = trip.members.find(
-                  (m) => m.id === currentMemberId,
-                );
-                if (!member) return;
-                await sendMessage(text, member.id, member.name);
-              }}
-            />
-          </div>
-        )}
-
-        {/* ── Balances tab ─────────────────────────── */}
-        {activeTab === "balances" && (
-          <div className="animate-fade-in">
-            <BalanceSheet
-              trip={trip}
-              expenses={visibleExpenses}
-              onRecordSettlement={async ({ from, to, amount }) => {
-                const fromMember = trip.members.find((m) => m.id === from);
-                const toMember = trip.members.find((m) => m.id === to);
-                if (!fromMember || !toMember) return;
-                await addExpense({
-                  description: `💸 Settlement to ${toMember.name}`,
-                  amount,
-                  category: "other",
-                  paidBy: from,
-                  date: todayISO(),
-                  splits: [{ memberId: to, amount }],
-                  createdBy: currentMemberId ?? "",
-                  isPrivate: false,
-                  isSettlement: true,
-                });
-              }}
-            />
-          </div>
-        )}
-      </div>
+          {/* ── Balances tab ─────────────────────────── */}
+          {activeTab === "balances" && (
+            <div className="animate-fade-in">
+              <BalanceSheet
+                trip={trip}
+                expenses={visibleExpenses}
+                onRecordSettlement={async ({ from, to, amount }) => {
+                  const fromMember = trip.members.find((m) => m.id === from);
+                  const toMember = trip.members.find((m) => m.id === to);
+                  if (!fromMember || !toMember) return;
+                  await addExpense({
+                    description: `💸 Settlement to ${toMember.name}`,
+                    amount,
+                    category: "other",
+                    paidBy: from,
+                    date: todayISO(),
+                    splits: [{ memberId: to, amount }],
+                    createdBy: currentMemberId ?? "",
+                    isPrivate: false,
+                    isSettlement: true,
+                  });
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </PullToRefresh>
 
       {/* ── Floating action button ─────────────────── */}
       {currentMemberId && (
@@ -913,7 +904,36 @@ export default function TripDashboard({ tripCode }: Props) {
         </button>
       )}
 
+      {/* ── Chat floating button ────────────────────── */}
+      <div className="fixed bottom-6 left-4 sm:left-6 z-30">
+        <button
+          onClick={() => setShowChat(true)}
+          className="btn-press relative w-14 h-14 rounded-full bg-ocean text-white flex items-center justify-center shadow-xl hover:bg-ocean/90 transition-colors"
+        >
+          <MessageCircle className="w-6 h-6" />
+          {messages.length > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-sunset text-white text-[10px] font-bold flex items-center justify-center">
+              {messages.length > 99 ? "99+" : messages.length}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* ── Modals ─────────────────────────────────── */}
+
+      {showChat && (
+        <ChatPanel
+          messages={messages}
+          trip={trip}
+          currentMemberId={currentMemberId}
+          onClose={() => setShowChat(false)}
+          onSend={async (text) => {
+            const member = trip.members.find((m) => m.id === currentMemberId);
+            if (!member) return;
+            await sendMessage(text, member.id, member.name);
+          }}
+        />
+      )}
 
       {(showAddExpense || editingExpense) && currentMemberId && (
         <AddExpenseModal

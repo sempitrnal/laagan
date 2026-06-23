@@ -1,4 +1,6 @@
-import TripDashboard from '@/components/TripDashboard';
+import TripDashboard from "@/components/TripDashboard";
+
+export const dynamic = "force-dynamic";
 
 export default async function TripPage({
   params,

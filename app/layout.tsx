@@ -1,7 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import SWRegister from "./SWRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,22 +22,23 @@ export const metadata: Metadata = {
   title: "Wandersplit — Travel Budget Tracker",
   description: "Track, split and share travel expenses with your group.",
   manifest: "/manifest.json",
-  themeColor: "#1b5e8a",
   appleWebApp: {
     capable: true,
     title: "Wandersplit",
     statusBarStyle: "black-translucent",
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: "cover",
-  },
   icons: {
     apple: "/icon-192.svg",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#1b5e8a",
 };
 
 export default function RootLayout({
@@ -54,11 +54,13 @@ export default function RootLayout({
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`,
+          }}
+        />
       </head>
-      <body className="min-h-full flex flex-col">
-        <SWRegister />
-        {children}
-      </body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }

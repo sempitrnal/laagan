@@ -1,10 +1,66 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowLeft, Send, CheckCheck } from "lucide-react";
+import { ArrowLeft, Send, CheckCheck, Image, ImagePlus } from "lucide-react";
 import type { Message, Trip } from "@/lib/types";
 import { getMemberColor, getMemberInitials } from "@/lib/utils";
 import { useChat } from "@/lib/useChat";
+import { uploadChatImage } from "@/lib/tripService";
 import { playSendSound, playNotifySound, unlockAudio } from "@/lib/sounds";
+
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+const IMAGE_HOSTS = [
+  "media.giphy.com",
+  "media.tenor.com",
+  "i.imgur.com",
+  "imgur.com",
+  "cdn.discordapp.com",
+  "media.discordapp.net",
+  "firebasestorage.googleapis.com",
+];
+
+function isImageUrl(url: string) {
+  if (url.startsWith("data:image/")) return true;
+  const directImage = /\.(gif|jpg|jpeg|png|webp|bmp|svg)(\?.*)?$/i.test(url);
+  const knownHost = IMAGE_HOSTS.some((host) =>
+    url.toLowerCase().includes(host),
+  );
+  return directImage || knownHost;
+}
+
+function renderMessageContent(text: string) {
+  const parts = text.split(URL_REGEX);
+  return parts.map((part, i) => {
+    if (!part.match(/^https?:\/\//)) {
+      return <span key={i}>{part}</span>;
+    }
+    if (isImageUrl(part)) {
+      return (
+        <img
+          key={i}
+          src={part}
+          alt="GIF"
+          loading="lazy"
+          className="max-w-full max-h-48 rounded-lg mt-1 block"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
+      );
+    }
+    return (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noreferrer"
+        className="underline break-all"
+      >
+        {part}
+      </a>
+    );
+  });
+}
 
 interface Props {
   messages: Message[];
@@ -40,9 +96,14 @@ export default function ChatPanel({
 }: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [showGifInput, setShowGifInput] = useState(false);
+  const [gifUrl, setGifUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const gifInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const prevMsgCount = useRef(messages.length);
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
   const currentMember =
@@ -71,6 +132,11 @@ export default function ChatPanel({
       vv.removeEventListener("scroll", update);
     };
   }, []);
+
+  /* ── Auto-focus GIF input when shown ─────── */
+  useEffect(() => {
+    if (showGifInput) gifInputRef.current?.focus();
+  }, [showGifInput]);
 
   /* ── Auto-scroll ─────────────────────────── */
   useEffect(() => {
@@ -111,15 +177,42 @@ export default function ChatPanel({
   async function handleSend() {
     const trimmed = text.trim();
     if (!trimmed || !currentMemberId || sending) return;
-    setSending(true);
+    await submitMessage(trimmed);
     setText("");
+    inputRef.current?.focus();
+  }
+
+  async function handleGifSend() {
+    const trimmed = gifUrl.trim();
+    if (!trimmed || !currentMemberId || sending) return;
+    await submitMessage(trimmed);
+    setGifUrl("");
+    setShowGifInput(false);
+  }
+
+  async function submitMessage(content: string) {
+    setSending(true);
     setTyping(false);
     playSendSound();
     try {
-      await onSend(trimmed);
+      await onSend(content);
     } finally {
       setSending(false);
-      inputRef.current?.focus();
+    }
+  }
+
+  async function handleImageUpload(file: File) {
+    if (!file || !currentMemberId) return;
+    if (!file.type.startsWith("image/")) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadChatImage(trip.id, file);
+      await submitMessage(url);
+    } catch (e) {
+      console.error("Image upload failed", e);
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -238,7 +331,7 @@ export default function ChatPanel({
                           }`}
                           style={{ wordBreak: "break-word" }}
                         >
-                          {msg.text}
+                          {renderMessageContent(msg.text)}
                         </div>
                         <div
                           className={`flex items-center gap-1 px-1 ${isMe ? "flex-row-reverse" : ""}`}
@@ -300,38 +393,94 @@ export default function ChatPanel({
 
       {/* Input bar */}
       <div
-        className="bg-white border-t border-warmgray px-3 pt-2 flex items-center gap-2 shrink-0"
+        className="bg-white border-t border-warmgray px-3 pt-2 flex flex-col shrink-0"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
       >
-        {currentMemberId ? (
-          <>
+        {showGifInput && currentMemberId && (
+          <div className="flex items-center gap-2 mb-2">
             <input
-              ref={inputRef}
+              ref={gifInputRef}
               type="text"
-              value={text}
-              onChange={(e) => handleTyping(e.target.value)}
+              value={gifUrl}
+              onChange={(e) => setGifUrl(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  handleSend();
+                  handleGifSend();
                 }
               }}
-              placeholder="Message the group…"
+              placeholder="Paste GIF/image URL (Giphy, Tenor, Imgur...)"
               className="flex-1 bg-sand rounded-2xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ocean/30 placeholder:text-muted"
             />
             <button
-              onClick={handleSend}
-              disabled={!text.trim() || sending}
-              className="w-9 h-9 rounded-full bg-ocean text-white flex items-center justify-center shrink-0 disabled:opacity-40 btn-press transition-opacity"
+              onClick={handleGifSend}
+              disabled={!gifUrl.trim() || sending}
+              className="px-3 h-9 rounded-full bg-ocean text-white text-xs font-semibold flex items-center justify-center shrink-0 disabled:opacity-40 btn-press transition-opacity"
             >
-              <Send className="w-4 h-4" />
+              Send GIF
             </button>
-          </>
-        ) : (
-          <p className="text-xs text-muted text-center w-full py-2">
-            Select your name above to chat
-          </p>
+          </div>
         )}
+        <div className="flex items-center gap-2">
+          {currentMemberId ? (
+            <>
+              <input
+                ref={inputRef}
+                type="text"
+                value={text}
+                onChange={(e) => handleTyping(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Message the group…"
+                className="flex-1 bg-sand rounded-2xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ocean/30 placeholder:text-muted"
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImageUpload(file);
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImage}
+                className="w-9 h-9 rounded-full bg-sand text-ocean flex items-center justify-center shrink-0 btn-press transition-opacity disabled:opacity-40"
+                title="Send a photo"
+              >
+                {uploadingImage ? (
+                  <span className="w-4 h-4 border-2 border-ocean border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ImagePlus className="w-4 h-4" />
+                )}
+              </button>
+              <button
+                onClick={() => setShowGifInput((s) => !s)}
+                className="w-9 h-9 rounded-full bg-sand text-ocean flex items-center justify-center shrink-0 btn-press transition-opacity"
+                title="Send a GIF"
+              >
+                <Image className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={!text.trim() || sending}
+                className="w-9 h-9 rounded-full bg-ocean text-white flex items-center justify-center shrink-0 disabled:opacity-40 btn-press transition-opacity"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <p className="text-xs text-muted text-center w-full py-2">
+              Select your name above to chat
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

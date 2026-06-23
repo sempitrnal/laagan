@@ -1,5 +1,6 @@
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
+import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 export const isFirebaseConfigured = !!(
   process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
@@ -7,6 +8,7 @@ export const isFirebaseConfigured = !!(
 );
 
 let _db: Firestore | null = null;
+let _storage: FirebaseStorage | null = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -21,9 +23,11 @@ if (isFirebaseConfigured) {
     const app: FirebaseApp =
       getApps().length === 0 ? initializeApp(config) : getApps()[0];
     _db = getFirestore(app);
+    _storage = getStorage(app);
   } catch (e) {
-    console.warn('Firebase initialization failed:', e);
+    console.warn("Firebase initialization failed:", e);
   }
 }
 
 export const db = _db;
+export const storage = _storage;

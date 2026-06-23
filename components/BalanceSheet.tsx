@@ -24,8 +24,27 @@ export default function BalanceSheet({
   expenses,
   onRecordSettlement,
 }: Props) {
-  const balances = calculateBalances(trip.members, expenses);
-  const settlements = calculateSettlements(balances);
+  const nonSettlementExpenses = expenses.filter((e) => !e.isSettlement);
+  const settlementExpenses = expenses.filter((e) => e.isSettlement);
+  const balances = calculateBalances(trip.members, nonSettlementExpenses);
+
+  const settlementAdjustments: Record<string, number> = {};
+  settlementExpenses.forEach((s) => {
+    const amount = s.amount;
+    const debtor = s.paidBy;
+    const creditor = s.splits[0]?.memberId;
+    if (!debtor || debtor === "ALL" || !creditor) return;
+    settlementAdjustments[debtor] =
+      (settlementAdjustments[debtor] ?? 0) + amount;
+    settlementAdjustments[creditor] =
+      (settlementAdjustments[creditor] ?? 0) - amount;
+  });
+
+  const netBalances = balances.map((b) => ({
+    ...b,
+    net: b.net + (settlementAdjustments[b.memberId] ?? 0),
+  }));
+  const settlements = calculateSettlements(netBalances);
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
 
   return (

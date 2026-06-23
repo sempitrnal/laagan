@@ -1,5 +1,6 @@
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
-import { db, isFirebaseConfigured } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage, isFirebaseConfigured } from "./firebase";
 import type { Trip, Member } from "./types";
 import { generateTripCode, generateId } from "./utils";
 
@@ -121,4 +122,20 @@ export async function addMemberToTrip(
   }
 
   return { memberId };
+}
+
+export function uploadChatImage(code: string, file: File): Promise<string> {
+  if (!isFirebaseConfigured || !storage) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read image"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const filename = `${Date.now()}_${generateId()}.${ext}`;
+  const fileRef = ref(storage, `trips/${code}/images/${filename}`);
+  return uploadBytes(fileRef, file).then(() => getDownloadURL(fileRef));
 }

@@ -337,11 +337,24 @@ function CategoryCard({
 /* ── Members row ──────────────────────────────── */
 function MembersCard({
   members,
+  expenses,
+  currency,
   onAddMember,
 }: {
   members: Array<{ id: string; name: string }>;
+  expenses: Expense[];
+  currency: string;
   onAddMember: () => void;
 }) {
+  const totalByMember = Object.fromEntries(
+    members.map((m) => [
+      m.id,
+      expenses
+        .filter((e) => e.paidBy === m.id && !e.isSettlement)
+        .reduce((sum, e) => sum + e.amount, 0),
+    ]),
+  );
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-warmgray px-5 py-4">
       <div className="flex items-center justify-between mb-3">
@@ -357,19 +370,26 @@ function MembersCard({
           Add
         </button>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2">
         {members.map((m, i) => (
           <div
             key={m.id}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-sand border border-warmgray"
+            className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-sand border border-warmgray"
           >
-            <div
-              className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
-              style={{ backgroundColor: getMemberColor(i) }}
-            >
-              {getMemberInitials(m.name)}
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+                style={{ backgroundColor: getMemberColor(i) }}
+              >
+                {getMemberInitials(m.name)}
+              </div>
+              <span className="text-xs font-medium text-night truncate">
+                {m.name}
+              </span>
             </div>
-            <span className="text-xs font-medium text-night">{m.name}</span>
+            <span className="text-xs font-semibold text-ocean whitespace-nowrap">
+              {formatAmount(totalByMember[m.id], currency)}
+            </span>
           </div>
         ))}
       </div>
@@ -576,12 +596,14 @@ export default function TripDashboard({ tripCode }: Props) {
   const memberIndex = Object.fromEntries(trip.members.map((m, i) => [m.id, i]));
 
   return (
-    <div className="min-h-screen bg-sand pb-24 flex flex-col">
+    <div
+      className="min-h-screen bg-sand pb-24 flex flex-col"
+      style={{ marginTop: "calc(-1 * env(safe-area-inset-top, 0px))" }}
+    >
       {/* ── Sticky Header ─────────────────────────── */}
-      <header
-        className="sticky top-0 z-40 bg-ocean-dark text-white shadow-lg"
-        style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}
-      >
+      <header className="sticky top-0 z-40 bg-ocean-dark text-white shadow-lg">
+        {/* Fills the camera/notch area with the header colour */}
+        <div style={{ height: "env(safe-area-inset-top, 0px)" }} aria-hidden />
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.push("/")}
@@ -682,6 +704,8 @@ export default function TripDashboard({ tripCode }: Props) {
             <div className="animate-slide-up delay-150">
               <MembersCard
                 members={trip.members}
+                expenses={visibleExpenses}
+                currency={trip.currency}
                 onAddMember={() => setShowAddMember(true)}
               />
             </div>

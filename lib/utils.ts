@@ -30,7 +30,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 export const CATEGORY_EMOJIS: Record<Category, string> = {
   lodging: "🏨",
   food: "🍽️",
-  transport: "✈️",
+  transport: "🚌🚢",
   activities: "🎯",
   shopping: "🛍️",
   other: "📦",

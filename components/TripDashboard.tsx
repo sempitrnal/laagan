@@ -30,6 +30,7 @@ import {
   formatDate,
   getCurrencySymbol,
   todayISO,
+  calculateBalances,
 } from "@/lib/utils";
 import type { Category, Expense } from "@/lib/types";
 import AddExpenseModal from "./AddExpenseModal";
@@ -108,12 +109,16 @@ function BudgetCard({
     totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
   const overBudget = remaining < 0;
 
-  const memberTotals = members.map((m, i) => ({
-    ...m,
+  const nonSettlementExpenses = expenses.filter((e) => !e.isSettlement);
+  const memberBalances = calculateBalances(
+    members.map((m) => ({ id: m.id, name: m.name })),
+    nonSettlementExpenses,
+  );
+  const memberTotals = memberBalances.map((b, i) => ({
+    id: b.memberId,
+    name: b.memberName,
     idx: i,
-    amount: expenses
-      .filter((e) => e.paidBy === m.id && !e.isSettlement)
-      .reduce((s, e) => s + e.amount, 0),
+    amount: b.owes,
   }));
   const maxMemberAmount = Math.max(...memberTotals.map((m) => m.amount), 1);
 
@@ -401,14 +406,12 @@ function MembersCard({
   currency: string;
   onAddMember: () => void;
 }) {
-  const totalByMember = Object.fromEntries(
-    members.map((m) => [
-      m.id,
-      expenses
-        .filter((e) => e.paidBy === m.id && !e.isSettlement)
-        .reduce((sum, e) => sum + e.amount, 0),
-    ]),
+  const nonSettlementExpenses = expenses.filter((e) => !e.isSettlement);
+  const balances = calculateBalances(
+    members.map((m) => ({ id: m.id, name: m.name })),
+    nonSettlementExpenses,
   );
+  const balanceById = Object.fromEntries(balances.map((b) => [b.memberId, b]));
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-warmgray px-5 py-4">
@@ -426,27 +429,30 @@ function MembersCard({
         </button>
       </div>
       <div className="flex flex-col gap-2">
-        {members.map((m, i) => (
-          <div
-            key={m.id}
-            className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-sand border border-warmgray"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <div
-                className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
-                style={{ backgroundColor: getMemberColor(i) }}
-              >
-                {getMemberInitials(m.name)}
+        {members.map((m, i) => {
+          const b = balanceById[m.id];
+          return (
+            <div
+              key={m.id}
+              className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-sand border border-warmgray"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: getMemberColor(i) }}
+                >
+                  {getMemberInitials(m.name)}
+                </div>
+                <span className="text-xs font-medium text-night truncate">
+                  {m.name}
+                </span>
               </div>
-              <span className="text-xs font-medium text-night truncate">
-                {m.name}
+              <span className="text-xs font-semibold text-ocean whitespace-nowrap">
+                {formatAmount(b?.owes ?? 0, currency)}
               </span>
             </div>
-            <span className="text-xs font-semibold text-ocean whitespace-nowrap">
-              {formatAmount(totalByMember[m.id], currency)}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -869,7 +875,7 @@ export default function TripDashboard({ tripCode }: Props) {
                             {/* Row 2: Category + badges (single line) */}
                             <div className="flex items-center gap-1.5 mt-1.5">
                               <span
-                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-white leading-none"
+                                className="text-[10px] font-semibold px-2 py-1 rounded-full text-white leading-none"
                                 style={{
                                   backgroundColor:
                                     CATEGORY_COLORS[exp.category],

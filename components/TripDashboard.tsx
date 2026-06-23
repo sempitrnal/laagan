@@ -88,11 +88,15 @@ function BudgetCard({
   totalBudget,
   totalSpent,
   currency,
+  members,
+  expenses,
   onEdit,
 }: {
   totalBudget: number;
   totalSpent: number;
   currency: string;
+  members: Array<{ id: string; name: string }>;
+  expenses: Expense[];
   onEdit: (amount: number) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -103,6 +107,15 @@ function BudgetCard({
   const pct =
     totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
   const overBudget = remaining < 0;
+
+  const memberTotals = members.map((m, i) => ({
+    ...m,
+    idx: i,
+    amount: expenses
+      .filter((e) => e.paidBy === m.id && !e.isSettlement)
+      .reduce((s, e) => s + e.amount, 0),
+  }));
+  const maxMemberAmount = Math.max(...memberTotals.map((m) => m.amount), 1);
 
   const barColor = pct < 70 ? "#2A7A56" : pct < 90 ? "#E8A917" : "#D94F3A";
 
@@ -226,7 +239,7 @@ function BudgetCard({
           </div>
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="text-center">
               <p className="text-[11px] text-muted mb-0.5 uppercase tracking-wide font-medium">
                 Budget
@@ -255,6 +268,48 @@ function BudgetCard({
                   currency={currency}
                 />
               </p>
+            </div>
+          </div>
+
+          {/* Member breakdown */}
+          <div className="space-y-2 border-t border-warmgray pt-3">
+            <p className="text-[11px] text-muted uppercase tracking-wide font-medium">
+              By Member
+            </p>
+            <div className="space-y-1.5">
+              {memberTotals.map((m) => {
+                if (m.amount <= 0) return null;
+                const barPct = (m.amount / maxMemberAmount) * 100;
+                return (
+                  <div key={m.id} className="flex items-center gap-2">
+                    <div
+                      className="w-5 h-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: getMemberColor(m.idx) }}
+                    >
+                      {getMemberInitials(m.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[11px] font-medium text-night truncate">
+                          {m.name}
+                        </span>
+                        <span className="text-[11px] font-semibold text-ocean whitespace-nowrap ml-2">
+                          {formatAmount(m.amount, currency)}
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-sand rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${barPct}%`,
+                            backgroundColor: getMemberColor(m.idx),
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
@@ -688,6 +743,8 @@ export default function TripDashboard({ tripCode }: Props) {
               totalBudget={trip.totalBudget}
               totalSpent={totalSpent}
               currency={trip.currency}
+              members={trip.members}
+              expenses={visibleExpenses}
               onEdit={updateBudget}
             />
           </div>

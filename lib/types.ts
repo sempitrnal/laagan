@@ -62,6 +62,14 @@ export interface Message {
   senderId: string;
   senderName: string;
   createdAt: number;
+  readBy?: Record<string, number>;
+}
+
+export interface Typing {
+  memberId: string;
+  name: string;
+  isTyping: boolean;
+  updatedAt: number;
 }
 
 export interface RecentTrip {

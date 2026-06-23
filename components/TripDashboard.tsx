@@ -37,6 +37,7 @@ import BalanceSheet from "./BalanceSheet";
 import ChatPanel from "./ChatPanel";
 import PullToRefresh from "./PullToRefresh";
 import ShareModal from "./ShareModal";
+import { playNotifySound, unlockAudio } from "@/lib/sounds";
 
 interface Props {
   tripCode: string;
@@ -412,6 +413,41 @@ export default function TripDashboard({ tripCode }: Props) {
   const [joiningLoading, setJoiningLoading] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ name: string; text: string } | null>(
+    null,
+  );
+  const prevMsgCount = useRef(messages.length);
+  const showChatRef = useRef(showChat);
+  showChatRef.current = showChat;
+
+  /* ── Request notification permission ──────── */
+  useEffect(() => {
+    const handler = () => unlockAudio();
+    window.addEventListener("touchstart", handler, { once: true });
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    return () => window.removeEventListener("touchstart", handler);
+  }, []);
+
+  /* ── Watch for new messages outside chat ───── */
+  useEffect(() => {
+    const prev = prevMsgCount.current;
+    prevMsgCount.current = messages.length;
+    if (messages.length <= prev || showChatRef.current) return;
+    const latest = messages[messages.length - 1];
+    if (!latest || latest.senderId === currentMemberId) return;
+    playNotifySound();
+    setToast({ name: latest.senderName, text: latest.text });
+    const timer = setTimeout(() => setToast(null), 4000);
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(`${latest.senderName} in ${trip?.name ?? "chat"}`, {
+        body: latest.text,
+        icon: "/icon-192.svg",
+      });
+    }
+    return () => clearTimeout(timer);
+  }, [messages, currentMemberId, trip]);
 
   useEffect(() => {
     const id = localStorage.getItem(`wt_me_${tripCode}`);
@@ -542,7 +578,10 @@ export default function TripDashboard({ tripCode }: Props) {
   return (
     <div className="min-h-screen bg-sand pb-24 flex flex-col">
       {/* ── Sticky Header ─────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-ocean-dark text-white shadow-lg">
+      <header
+        className="sticky top-0 z-40 bg-ocean-dark text-white shadow-lg"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}
+      >
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.push("/")}
@@ -901,6 +940,26 @@ export default function TripDashboard({ tripCode }: Props) {
           <Plus className="w-5 h-5" />
           <span className="hidden sm:inline">Add Expense</span>
           <span className="sm:hidden">Add</span>
+        </button>
+      )}
+
+      {/* ── Notification toast ───────────────────── */}
+      {toast && (
+        <button
+          onClick={() => {
+            setToast(null);
+            setShowChat(true);
+          }}
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 bg-night text-white text-sm px-4 py-3 rounded-2xl shadow-xl animate-slide-down max-w-xs w-[90vw]"
+          style={{ marginTop: "env(safe-area-inset-top)" }}
+        >
+          <MessageCircle className="w-4 h-4 shrink-0 text-ocean" />
+          <div className="flex-1 min-w-0 text-left">
+            <p className="font-semibold text-xs leading-none">{toast.name}</p>
+            <p className="text-xs text-white/70 mt-0.5 truncate">
+              {toast.text}
+            </p>
+          </div>
         </button>
       )}
 

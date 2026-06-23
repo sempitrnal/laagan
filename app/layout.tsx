@@ -56,7 +56,30 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`,
+            __html: `
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                  // Check for updates every 30 minutes while the page is open
+                  setInterval(function() { reg.update(); }, 30 * 60 * 1000);
+
+                  // If a new service worker is waiting, activate it immediately
+                  reg.addEventListener('updatefound', function() {
+                    var newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', function() {
+                      if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        // New version available — tell the SW to skip waiting
+                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                      }
+                    });
+                  });
+                }).catch(function(){});
+
+                // When the new controller takes over, reload to load the new app shell
+                navigator.serviceWorker.addEventListener('controllerchange', function() {
+                  window.location.reload();
+                });
+              }
+            `,
           }}
         />
       </head>

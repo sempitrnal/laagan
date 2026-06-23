@@ -1,11 +1,22 @@
 "use client";
-import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
 import { Loader2 } from "lucide-react";
 
 interface PullToRefreshProps {
   children: ReactNode;
   onRefresh: () => Promise<void> | void;
   threshold?: number;
+}
+
+function isMobile() {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
 export default function PullToRefresh({
@@ -21,28 +32,24 @@ export default function PullToRefresh({
   const currentY = useRef(0);
   const isAtTop = useRef(true);
 
-  const isMobile = useCallback(() => {
-    if (typeof navigator === "undefined") return false;
-    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  }, []);
+  if (!isMobile()) return <>{children}</>;
 
-  const checkAtTop = useCallback(() => {
+  const checkAtTop = () => {
     const el = containerRef.current;
     if (!el) return true;
     return el.scrollTop <= 0;
-  }, []);
+  };
 
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isMobile()) return;
+  const onTouchStart = (e: React.TouchEvent) => {
     isAtTop.current = checkAtTop();
     if (!isAtTop.current) return;
     startY.current = e.touches[0].clientY;
     currentY.current = e.touches[0].clientY;
     setIsPulling(true);
-  }, [checkAtTop, isMobile]);
+  };
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isMobile() || !isPulling || !isAtTop.current || refreshing) return;
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling || !isAtTop.current || refreshing) return;
     currentY.current = e.touches[0].clientY;
     const delta = Math.max(0, currentY.current - startY.current);
     const damped = Math.min(delta * 0.5, threshold * 1.6);
@@ -50,10 +57,10 @@ export default function PullToRefresh({
     if (containerRef.current) {
       containerRef.current.style.transform = `translateY(${damped}px)`;
     }
-  }, [isMobile, isPulling, refreshing, threshold]);
+  };
 
-  const onTouchEnd = useCallback(async () => {
-    if (!isMobile() || !isPulling) return;
+  const onTouchEnd = async () => {
+    if (!isPulling) return;
     setIsPulling(false);
 
     if (pullDistance >= threshold && !refreshing) {
@@ -71,9 +78,8 @@ export default function PullToRefresh({
           containerRef.current.style.transition = "transform 0.25s ease-out";
           containerRef.current.style.transform = "translateY(0px)";
           setTimeout(() => {
-            if (containerRef.current) {
+            if (containerRef.current)
               containerRef.current.style.transition = "";
-            }
           }, 250);
         }
         setRefreshing(false);
@@ -84,13 +90,11 @@ export default function PullToRefresh({
         containerRef.current.style.transition = "transform 0.25s ease-out";
         containerRef.current.style.transform = "translateY(0px)";
         setTimeout(() => {
-          if (containerRef.current) {
-            containerRef.current.style.transition = "";
-          }
+          if (containerRef.current) containerRef.current.style.transition = "";
         }, 250);
       }
     }
-  }, [isMobile, isPulling, onRefresh, pullDistance, refreshing, threshold]);
+  };
 
   useEffect(() => {
     return () => {
@@ -124,7 +128,11 @@ export default function PullToRefresh({
           )}
         </div>
         <p className="text-xs text-muted font-medium pb-2">
-          {refreshing ? "Refreshing..." : pullDistance >= threshold ? "Release to refresh" : "Pull to refresh"}
+          {refreshing
+            ? "Refreshing..."
+            : pullDistance >= threshold
+              ? "Release to refresh"
+              : "Pull to refresh"}
         </p>
       </div>
 
